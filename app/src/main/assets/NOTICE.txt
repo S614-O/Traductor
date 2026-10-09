@@ -1,0 +1,13 @@
+Comic balloon detector ONNX used by TranslateApp (masisolutions).
+
+This file `detector.onnx` is a byte-identical copy of
+`detector-v4-s_int8.onnx` from:
+
+  https://huggingface.co/ogkalu/comic-text-and-bubble-detector
+
+Original weights: Apache License 2.0 (see LICENSE).
+Architecture: RT-DETR (not Ultralytics YOLO).
+We did not retrain. We renamed the file for a stable app catalog path
+and added this NOTICE.
+
+Copyright of the original checkpoint: ogkalu
