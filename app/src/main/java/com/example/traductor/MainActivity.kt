@@ -35,6 +35,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +43,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.traductor.ui.theme.TraductorTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,6 +89,25 @@ fun PantallaInicio(onAbrirGaleria: () -> Unit, onAbrirDetector: () -> Unit) {
     var negrita by remember { mutableStateOf(prefs.getBoolean("negrita", false)) }
     var tema by remember { mutableStateOf(prefs.getInt("tema", 0)) }
     var opacidad by remember { mutableStateOf(prefs.getFloat("opacidad", 0.92f)) }
+
+    val scope = rememberCoroutineScope()
+    var descargando by remember { mutableStateOf(false) }
+    var avisoDatos by remember { mutableStateOf(false) }
+    var estadoOcr by remember {
+        mutableStateOf(if (MangaOcr.disponible(context)) "Instalado" else "No instalado")
+    }
+    val selectorOcr = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            estadoOcr = "Copiando archivos…"
+            scope.launch {
+                val n = withContext(Dispatchers.IO) { MangaOcr.importar(context, uris) }
+                estadoOcr = if (MangaOcr.disponible(context)) "Instalado"
+                else "Copiados $n archivo(s); faltan encoder, decoder o vocab.txt"
+            }
+        }
+    }
 
     // Pasa los ajustes al servicio y los guarda cada vez que cambian
     SideEffect {
@@ -134,6 +157,44 @@ fun PantallaInicio(onAbrirGaleria: () -> Unit, onAbrirDetector: () -> Unit) {
                     }
                 }
         }
+
+        Spacer(Modifier.height(16.dp))
+        Text("Lectura de japonés (manga-ocr)")
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                enabled = !descargando,
+                onClick = {
+                    if (!MangaOcr.conWifi(context) && !avisoDatos) {
+                        avisoDatos = true
+                        estadoOcr = "Sin Wi-Fi: son unos 460 MB. Pulsa otra vez para usar datos móviles"
+                    } else {
+                        avisoDatos = false
+                        descargando = true
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    MangaOcr.descargar(context) { estadoOcr = it }
+                                }
+                                estadoOcr =
+                                    if (MangaOcr.disponible(context)) "Instalado" else "Faltan archivos"
+                            } catch (e: Exception) {
+                                estadoOcr = "Error: ${e.message?.take(80)}"
+                            }
+                            descargando = false
+                        }
+                    }
+                }
+            ) { Text("Descargar") }
+
+            OutlinedButton(
+                enabled = !descargando,
+                onClick = { selectorOcr.launch(arrayOf("*/*")) }
+            ) { Text("Importar") }
+        }
+        Text(estadoOcr)
 
         Spacer(Modifier.height(24.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {

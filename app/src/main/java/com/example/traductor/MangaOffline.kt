@@ -37,16 +37,21 @@ object MangaOffline {
             textos = listOf(RectF(0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat()))
         }
 
+        // Para japonés se usa manga-ocr si está instalado; si no, ML Kit
+        val usarMangaOcr = idioma == "ja" && MangaOcr.disponible(context)
+        val minimoLetras = if (idioma == "ja") 1 else 2
+
         val resultado = mutableListOf<Pair<Rect, String>>()
         for (t in textos) {
             val recorte = recortar(bitmap, t) ?: continue
             val original = try {
-                Tasks.await(recognizer.process(InputImage.fromBitmap(recorte, 0))).text
+                if (usarMangaOcr) MangaOcr.leer(context, recorte)
+                else Tasks.await(recognizer.process(InputImage.fromBitmap(recorte, 0))).text
             } finally {
                 recorte.recycle()
             }
             // Ignora efectos como "!" o "..." que no son texto traducible
-            if (original.count { it.isLetter() } < 2) continue
+            if (original.count { it.isLetter() } < minimoLetras) continue
 
             val limpio = limpiarTexto(original, idioma)
             val traduccion = Tasks.await(translator.translate(limpio)).trim()
